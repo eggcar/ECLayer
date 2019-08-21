@@ -21,8 +21,9 @@
 
 #pragma once
 
-#include <stdint.h>
 #include "ec_ioctl.h"
+
+#include <stdint.h>
 
 /**
  * STM32 U(S)ART commands
@@ -38,19 +39,8 @@
 #define CMD_USART_GETPARITY _IOR(STM32_USART_MAGIC, 8, uint32_t *)
 #define CMD_USART_ENABLE _IO(STM32_USART_MAGIC, 9)
 #define CMD_USART_DISABLE _IO(STM32_USART_MAGIC, 10)
-
-/**
- * Cyclone IV time holdover module commands
-*/
-#define CYCIV_HO_MAGIC 'L'
-#define CMD_HOLDOVER_IOUPDATE _IO(CYCIV_HO_MAGIC, 1)
-#define CMD_HOLDOVER_DISABLE_PPS _IO(CYCIV_HO_MAGIC, 2)
-#define CMD_HOLDOVER_ENABLE_PPS _IO(CYCIV_HO_MAGIC, 3)
-#define CMD_HOLDOVER_SYNC_PPS _IO(CYCIV_HO_MAGIC, 4)
-#define CMD_HOLDOVER_DISABLE_BCODE _IO(CYCIV_HO_MAGIC, 5)
-#define CMD_HOLDOVER_ENABLE_BCODE _IO(CYCIV_HO_MAGIC, 6)
-#define CMD_HOLDOVER_SYNC_BCODE _IO(CYCIV_HO_MAGIC, 7)
-#define CMD_HOLDOVER_RESET_REG _IO(CYCIV_HO_MAGIC, 8)
+#define CMD_USART_GETREADTS _IOR(STM32_USART_MAGIC, 11, void *)
+#define CMD_USART_GETWRITETS _IOR(STM32_USART_MAGIC, 12, void *)
 
 /**
  * Char LCD module commands

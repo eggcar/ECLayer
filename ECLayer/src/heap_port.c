@@ -30,8 +30,9 @@
 #include <stddef.h>
 
 /*
- * In this version of implementation, we're using the FreeRTOS
- * heap_x for dynamic memory management.
+ * You can imply your own memory pool method, or port to a 
+ * third-party implementation in your project.
+ * Here is an example using FreeRTOS heap manage method.
  */
 void *ecmalloc(size_t size)
 {

@@ -116,14 +116,12 @@ int32_t lcd2002_write(file_des_t *fd, const char *data, size_t count)
 	uint32_t _to_be_write;
 	volatile uint8_t *data_base = (uint8_t *)lcd_dev->lcd_base_addr + (lcd_dev->rs_addr_mask);
 	_to_be_write = (count < lcd_dev->row_ddram_length) ? count : lcd_dev->row_ddram_length;
-	uint8_t test;
 	EC_OPTIMIZE_ENTER
 	EC_OPTIMIZE_O0
 	// Put the if statement outside decrease some cost in the for loop.
 	if (lcd_dev->shift_enabled) {
 		for (int i = 0; i < _to_be_write; i++) {
 			data_base[0] = data[i];
-			//test = data_base[0];
 			lcd_dev->addr_counter += lcd_dev->addr_increment;
 			lcd_dev->shift_counter += lcd_dev->addr_increment;
 		}
@@ -131,7 +129,6 @@ int32_t lcd2002_write(file_des_t *fd, const char *data, size_t count)
 	else {
 		for (int i = 0; i < _to_be_write; i++) {
 			data_base[0] = data[i];
-			//test = data_base[0];
 			lcd_dev->addr_counter += lcd_dev->addr_increment;
 		}
 	}
@@ -301,8 +298,6 @@ int64_t lcd2002_lseek(file_des_t *fd, int64_t offset, int32_t origin)
 	volatile uint8_t *cmd_base = (uint8_t *)(lcd_dev->lcd_base_addr);
 	int64_t _calc_addr;
 
-
-
 	switch (origin) {
 	case EC_SEEK_SET:
 		_calc_addr = (offset > 0) ? offset : 0;
@@ -337,6 +332,7 @@ int64_t lcd2002_lseek(file_des_t *fd, int64_t offset, int32_t origin)
 int32_t lcd2002_close(file_des_t *fd)
 {
 	dev_lcd2002_t *lcd_dev = (dev_lcd2002_t *)(((ec_dev_t *)(fd->file->file_content))->private_data);
+	(void)lcd_dev;
 	if (fd == NULL) {
 		return -EBADFD;
 	}

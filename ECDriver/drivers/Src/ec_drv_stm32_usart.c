@@ -23,14 +23,19 @@
 
 #include "cfifo.h"
 #include "cmsis_os.h"
+#include "ec_config.h"
 #include "ec_dev.h"
 #include "ec_fcntl.h"
 #include "ec_file.h"
 #include "exceptions.h"
-#include "stm32f4xx_hal.h"
 #include "stm32f4xx_ll_usart.h"
 
+#if _EN_USART_TIMESTAMP
+#	include "systime_port.h"
+#endif
+
 #include <stdint.h>
+#include <string.h>
 
 static void __init_stm32_usart(dev_stm32_usart_t *dev, uint32_t flags);
 static void __disable_stm32_usart(dev_stm32_usart_t *dev);
@@ -112,6 +117,12 @@ int32_t stm32_usart_read(file_des_t *fd, char *data, size_t count)
 	int32_t err;
 	if (fd->file_flags & O_NOBLOCK) {
 		err = cfifo_popn(usart_dev->rx_buffer, data, count);
+#if _EN_USART_TIMESTAMP
+		if (err > 0) {
+			memcpy(&(usart_dev->read_timestamp), &(usart_dev->rx_timestamp), sizeof(timeStamp_t));
+			usart_dev->rx_ts_valid = 0;
+		}
+#endif
 		return err;
 	}
 	else {
@@ -137,6 +148,10 @@ int32_t stm32_usart_read(file_des_t *fd, char *data, size_t count)
 			}
 		}
 		ec_unlock(&(file->file_lock));
+#if _EN_USART_TIMESTAMP
+		memcpy(&(usart_dev->read_timestamp), &(usart_dev->rx_timestamp), sizeof(timeStamp_t));
+		usart_dev->rx_ts_valid = 0;
+#endif
 		return count;
 	}
 }
@@ -186,6 +201,10 @@ int32_t stm32_usart_write(file_des_t *fd, const char *data, size_t count)
 	if (fd->file_flags & O_NOBLOCK) {
 		err = cfifo_pushn(usart_dev->tx_buffer, data, count);
 		LL_USART_EnableIT_TXE(usart_dev->handle);
+#if _EN_USART_TIMESTAMP
+		memcpy(&(usart_dev->write_timestamp), &(usart_dev->tx_timestamp), sizeof(timeStamp_t));
+		usart_dev->tx_ts_valid = 0;
+#endif
 		return err;
 	}
 	else {
@@ -270,7 +289,7 @@ int32_t stm32_usart_ioctl(file_des_t *fd, uint32_t cmd, uint64_t arg)
 		uint32_t oversampling;
 		uint32_t baudrate;
 		uint32_t *rtval;
-		rtval = (uint32_t *)(arg & 0xffffffffU);
+		rtval = (uint32_t *)((uintptr_t)arg & 0xffffffffU);
 		periphclk = __get_stm32_usart_periphclk(usart_dev);
 		oversampling = LL_USART_GetOverSampling(usart_dev->handle);
 		baudrate = LL_USART_GetBaudRate(usart_dev->handle, periphclk, oversampling);
@@ -287,6 +306,18 @@ int32_t stm32_usart_ioctl(file_des_t *fd, uint32_t cmd, uint64_t arg)
 		LL_USART_Disable(usart_dev->handle);
 		break;
 	}
+#if _EN_USART_TIMESTAMP
+	case CMD_USART_GETREADTS: {
+		timeStamp_t *dest = (timeStamp_t *)((uintptr_t)arg & 0xffffffffU);
+		memcpy(dest, &(usart_dev->read_timestamp), sizeof(timeStamp_t));
+		break;
+	}
+	case CMD_USART_GETWRITETS: {
+		timeStamp_t *dest = (timeStamp_t *)((uintptr_t)arg & 0xffffffffU);
+		memcpy(dest, &(usart_dev->write_timestamp), sizeof(timeStamp_t));
+		break;
+	}
+#endif
 	default:
 		return -EBADCMD;
 	}
@@ -326,6 +357,11 @@ void ECDRV_IRQ_Handler_USART(ec_dev_t *dev)
 	int32_t err;
 	char ch, discard;
 
+#if _EN_USART_TIMESTAMP
+	timeStamp_t tmp_ts;
+	ECTimeStamp(&tmp_ts);
+#endif
+
 	if (dev == NULL) {
 		return;
 	}
@@ -347,6 +383,12 @@ void ECDRV_IRQ_Handler_USART(ec_dev_t *dev)
 			while (cfifo_push(dev_usart->rx_buffer, ch) == -EFIFOFULL) {
 				err = cfifo_pop(dev_usart->rx_buffer, &discard);
 			}
+#if _EN_USART_TIMESTAMP
+			if (!dev_usart->rx_ts_valid) {
+				memcpy(&(dev_usart->rx_timestamp), &tmp_ts, sizeof(timeStamp_t));
+				dev_usart->rx_ts_valid = 1;
+			}
+#endif
 		}
 	}
 
@@ -363,6 +405,12 @@ void ECDRV_IRQ_Handler_USART(ec_dev_t *dev)
 					// Transmit end callback add here
 				}
 				else {
+#if _EN_USART_TIMESTAMP
+					if (!dev_usart->tx_ts_valid) {
+						ECTimeStamp(&(dev_usart->tx_timestamp));
+						dev_usart->tx_ts_valid = 1;
+					}
+#endif
 					LL_USART_TransmitData8(husart, ch);
 				}
 			}

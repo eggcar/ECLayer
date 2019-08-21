@@ -22,6 +22,19 @@
 #ifndef __CMSIS_PORT_H
 #define __CMSIS_PORT_H
 
+/**
+ * If you're using STM32CubeMX to do project code generation,
+ * just include the 'stm32xxxx.h' in the STM32Cube library that
+ * is in your project, the CMSIS-Core is already included in that
+ * header file. For example, if you're using a STM32F4 family chip,
+ * just include "stm32f4xx.h" which is already in your generated
+ * project.
+ * 
+ * Otherwise, try to find the CMSIS-Core header file suitable for 
+ * your project and put it here.
+ */
+#include "stm32f4xx.h"
+
 //#include "core_cm0.h"
 //#include "core_cm0plus.h"
 //#include "core_cm3.h"
@@ -29,6 +42,11 @@
 //#include "core_cm7.h"
 //#include "core_sc000.h"
 //#include "core_sc300.h"
+
+/**
+ * If you failed to find the right cmsis-core file, you may try these code
+ * below. It's not tested on all compile tool chains.
+ */
 
 /*
 #define __LDREXW(x) __ldrex(x)
@@ -47,6 +65,5 @@ static inline void __set_PRIMASK(uint32_t priMask)
 }
 */
 
-#include "stm32f4xx.h"
 
 #endif

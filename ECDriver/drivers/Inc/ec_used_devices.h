@@ -23,7 +23,7 @@
 
 // clang-format off
 #define __DEV_INCLUDE(x)	#x
-#define _DEV_INCLUDE(x)		__DEV_INCLUDE(../../devices/Inc/##x.h)
+#define _DEV_INCLUDE(x)		__DEV_INCLUDE(../../devices/Inc/##x##.h)
 #define DEV_INCLUDE(x)		_DEV_INCLUDE(x)
 // clang-format on
 

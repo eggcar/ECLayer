@@ -23,14 +23,18 @@
 #define __EC_DRV_STM32_USART_H
 
 #include "cfifo.h"
+#include "ec_config.h"
 #include "ec_dev.h"
 #include "ec_file.h"
 #include "ec_ioctl.h"
 #include "ioctl_cmd.h"
-#include "stm32f4xx_hal.h"
 #include "stm32f4xx_ll_usart.h"
 
 #include <stdint.h>
+
+#if _EN_USART_TIMESTAMP
+#	include "systime_port.h"
+#endif
 
 typedef struct config_stm32_usart_s {
 	enum {
@@ -53,6 +57,14 @@ typedef struct dev_stm32_usart_s {
 	cfifo_t *rx_buffer;
 	cfifo_t *tx_buffer;
 	config_stm32_usart_t *config;
+#if _EN_USART_TIMESTAMP
+	timeStamp_t rx_timestamp;
+	timeStamp_t tx_timestamp;
+	int32_t rx_ts_valid;
+	int32_t tx_ts_valid;
+	timeStamp_t read_timestamp;
+	timeStamp_t write_timestamp;
+#endif
 } dev_stm32_usart_t;
 
 int32_t stm32_usart_open(file_des_t *fd, const char *filename, uint32_t flags);

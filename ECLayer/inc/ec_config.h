@@ -33,4 +33,6 @@
 #define _MPU_EXIST			0
 #define _MMU_MPU_EXIST		_MMU_EXIST|_MPU_EXIST
 
+#define _EN_USART_TIMESTAMP	1
+
 #endif
