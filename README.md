@@ -34,6 +34,11 @@ You should enable gnu99 standard when compiling your projects.
 
 # Change Log
 
+## 2019/09/16
+### ECLayer core
+		ec_try_lock_irqsave() now recovers the global IRQ status when failed to acquire the lock.
+		ec_try_lock_irqsave()现在在获取锁失败的情况下，会自动恢复全局中断状态。
+
 ## 2019/08/21
 ### STM32 U(S)ART driver:
 	Add support for tx/rx timestamp capture.

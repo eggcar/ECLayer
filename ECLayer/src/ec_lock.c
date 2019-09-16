@@ -39,6 +39,9 @@ int32_t ec_try_lock_irqsave(ec_lock_t *lock, uint32_t *irqflag)
 		return 0;
 	}
 	else {
+		// If we failed to acquire the lock, we should recover
+		// the IRQ status.
+		__set_PRIMASK(irqflag);
 		return -EBUSY;
 	}
 }
