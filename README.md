@@ -34,6 +34,12 @@ You should enable gnu99 standard when compiling your projects.
 
 # Change Log
 
+## 2020/05/01
+### ECLayer configuration
+		Add a configuration in ec_config.h to enable/disable CMSIS-OS v2 api usage in ECLayer and ECDriver.
+		Rewrite STM32 usart driver, solved a thread-safety issue.
+		在ec_config.h中添加了一个配置项，可以使能/关闭在ECLayer和ECDriver中使用CMSIS-OS v2 API.
+		重写了STM32的usart驱动，解决了一个线程安全性问题.
 ## 2019/09/16
 ### ECLayer core
 		ec_try_lock_irqsave() now recovers the global IRQ status when failed to acquire the lock.
