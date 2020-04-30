@@ -22,7 +22,6 @@
 #include "ec_drv_stm32_usart.h"
 
 #include "cfifo.h"
-#include "cmsis_os.h"
 #include "ec_config.h"
 #include "ec_dev.h"
 #include "ec_fcntl.h"
@@ -32,6 +31,10 @@
 
 #if _EN_USART_TIMESTAMP
 #	include "systime_port.h"
+#endif
+
+#if _WITH_CMSISOS_V2
+#	include "cmsis_os2.h"
 #endif
 
 #include <stdint.h>
@@ -44,6 +47,7 @@ static uint32_t __get_stm32_usart_periphclk(dev_stm32_usart_t *usart_dev);
 int32_t stm32_usart_open(file_des_t *fd, const char *filename, uint32_t flags)
 {
 	dev_stm32_usart_t *usart_dev = (dev_stm32_usart_t *)(((ec_dev_t *)(fd->file->file_content))->private_data);
+	int32_t err;
 	if (fd == NULL) {
 		return -EBADFD;
 	}
@@ -54,13 +58,42 @@ int32_t stm32_usart_open(file_des_t *fd, const char *filename, uint32_t flags)
 			*/
 			usart_dev->rx_buffer = cfifo_new(usart_dev->config->rx_buffer_size);
 			if (usart_dev->rx_buffer == NULL) {
-				return -ENOMEM;
+				err = -ENOMEM;
+				goto release_file_refs;
 			}
 			usart_dev->tx_buffer = cfifo_new(usart_dev->config->tx_buffer_size);
 			if (usart_dev->tx_buffer == NULL) {
-				cfifo_delete(usart_dev->rx_buffer);
-				return -ENOMEM;
+				err = -ENOMEM;
+				goto release_rx_buffer;
 			}
+#if _WITH_CMSISOS_V2
+			usart_dev->wr_sem = osSemaphoreNew(1, 1, NULL);
+			if (usart_dev->wr_sem == NULL) {
+				err = -ENOMEM;
+				goto release_tx_buffer;
+			}
+
+			usart_dev->rd_sem = osSemaphoreNew(1, 0, NULL);
+			if (usart_dev->rd_sem == NULL) {
+				err = -ENOMEM;
+				goto release_wr_sem;
+			}
+
+			usart_dev->rx_sem = osSemaphoreNew(1, 0, NULL);
+			if (usart_dev->rx_sem == NULL) {
+				err = -ENOMEM;
+				goto release_rd_sem;
+			}
+
+			usart_dev->tx_sem = osSemaphoreNew(1, 1, NULL);
+			if (usart_dev->tx_sem == NULL) {
+				err = -ENOMEM;
+				goto release_rx_sem;
+			}
+#else
+			usart_dev->wr_lock = e_Unlocked;
+			usart_dev->rd_lock = e_Unlocked;
+#endif
 			__init_stm32_usart(usart_dev, flags);
 			return 0;
 		}
@@ -68,10 +101,25 @@ int32_t stm32_usart_open(file_des_t *fd, const char *filename, uint32_t flags)
 			/**
 			 * Multiple open not supported for USART yet.
 			*/
-			atomic_dec(&(fd->file->file_refs));
-			return -EBUSY;
+			err = -EBUSY;
+			goto release_file_refs;
 		}
 	}
+#if _WITH_CMSISOS_V2
+release_rx_sem:
+	osSemaphoreDelete(usart_dev->rx_sem);
+release_rd_sem:
+	osSemaphoreDelete(usart_dev->rd_sem);
+release_wr_sem:
+	osSemaphoreDelete(usart_dev->wr_sem);
+#endif
+release_tx_buffer:
+	cfifo_delete(usart_dev->rx_buffer);
+release_rx_buffer:
+	cfifo_delete(usart_dev->rx_buffer);
+release_file_refs:
+	atomic_dec(&(fd->file->file_refs));
+	return err;
 }
 
 int32_t stm32_usart_read(file_des_t *fd, char *data, size_t count)
@@ -107,7 +155,7 @@ int32_t stm32_usart_read(file_des_t *fd, char *data, size_t count)
 	else {
 	}
 
-	if (fd->file_flags & O_RDONLY == 0) {
+	if ((fd->file_flags & O_RDONLY) == 0) {
 		return -ENOTSUP;
 	}
 	else {
@@ -115,45 +163,78 @@ int32_t stm32_usart_read(file_des_t *fd, char *data, size_t count)
 
 	size_t rest_count = count;
 	int32_t err;
-	if (fd->file_flags & O_NOBLOCK) {
-		err = cfifo_popn(usart_dev->rx_buffer, data, count);
-#if _EN_USART_TIMESTAMP
-		if (err > 0) {
-			memcpy(&(usart_dev->read_timestamp), &(usart_dev->rx_timestamp), sizeof(timeStamp_t));
-			usart_dev->rx_ts_valid = 0;
+
+#if _WITH_CMSISOS_V2
+	if (__get_IPSR() != 0) {
+		if (osSemaphoreAcquire(usart_dev->rd_sem, 0) != osOK) {
+			return -EBUSY;
 		}
-#endif
-		return err;
 	}
 	else {
-		while (ec_try_lock(&(file->file_lock)) == -EBUSY) {
-			if (__get_IPSR() != 0) {
-				// If we are in ISR, we should never block.
+		if (fd->file_flags & O_NOBLOCK) {
+			if (osSemaphoreAcquire(usart_dev->rd_sem, 0) != osOK) {
 				return -EBUSY;
 			}
-			else {
-				/**
-				 * @todo Maybe semaphore or something like that is better. 
-				 * 		 But that need async callback mechanism.
-				 * */
-				osDelay(1);
+		}
+		else {
+			if (osSemaphoreAcquire(usart_dev->rd_sem, osWaitForever) != osOK) {
+				// unlikely
+				return -ENOLCK;
 			}
 		}
+	}
+#else
+	if (ec_try_lock(&(usart_dev->rd_lock)) == -EBUSY) {
+		if (__get_IPSR() != 0) {
+			// If we are in ISR, we should never block.
+			return -EBUSY;
+		}
+		else {
+			/**
+				 * @todo Coroutine or something else for no-os configuration.
+				 * */
+			return (fd->file_flags & O_NOBLOCK) ? -EBUSY : -ENOTSUP;
+		}
+	}
+#endif
+	if (fd->file_flags & O_NOBLOCK) {
+		err = cfifo_popn(usart_dev->rx_buffer, data, count);
+	}
+	else {
 		while (rest_count > 0) {
 			err = cfifo_popn(usart_dev->rx_buffer, &data[count - rest_count], rest_count);
 			if (err < 0) {
+#if _WITH_CMSISOS_V2 && STM32_USART_BLOCK_WITH_SCHEDULE
+				if (osSemaphoreAcquire(usart_dev->rx_sem, osWaitForever) != osOK) {
+					// Semaphore is not active or something else is wrong.
+					// Normally unreachable.
+					return -ENOLCK;
+				}
+#else
+				/**
+				 * @todo Coroutine or something else for no-os configuration.
+				*/
+#endif
 			}
 			else {
 				rest_count -= err;
 			}
 		}
-		ec_unlock(&(file->file_lock));
+		err = count;
+	}
 #if _EN_USART_TIMESTAMP
+	if (err > 0) {
 		memcpy(&(usart_dev->read_timestamp), &(usart_dev->rx_timestamp), sizeof(timeStamp_t));
 		usart_dev->rx_ts_valid = 0;
-#endif
-		return count;
 	}
+#endif
+
+#if _WITH_CMSISOS_V2
+	osSemaphoreRelease(usart_dev->rd_sem);
+#else
+	ec_unlock(&(usart_dev->rd_lock));
+#endif
+	return err;
 }
 
 int32_t stm32_usart_write(file_des_t *fd, const char *data, size_t count)
@@ -189,7 +270,7 @@ int32_t stm32_usart_write(file_des_t *fd, const char *data, size_t count)
 	else {
 	}
 
-	if (fd->file_flags & O_WRONLY == 0) {
+	if ((fd->file_flags & O_WRONLY) == 0) {
 		return -ENOTSUP;
 	}
 	else {
@@ -198,41 +279,77 @@ int32_t stm32_usart_write(file_des_t *fd, const char *data, size_t count)
 	size_t rest_count = count;
 	int32_t err;
 
+#if _WITH_CMSISOS_V2
+	if (__get_IPSR() != 0) {
+		if (osSemaphoreAcquire(usart_dev->wr_sem, 0) != osOK) {
+			return -EBUSY;
+		}
+	}
+	else {
+		if (fd->file_flags & O_NOBLOCK) {
+			if (osSemaphoreAcquire(usart_dev->wr_sem, 0) != osOK) {
+				return -EBUSY;
+			}
+		}
+		else {
+			if (osSemaphoreAcquire(usart_dev->wr_sem, osWaitForever) != osOK) {
+				// unlikely
+				return -ENOLCK;
+			}
+		}
+	}
+#else
+	if (ec_try_lock(&(usart_dev->wr_lock)) == -EBUSY) {
+		if (__get_IPSR() != 0) {
+			// If we are in ISR, we should never block.
+			return -EBUSY;
+		}
+		else {
+			/**
+				 * @todo Coroutine or something else for no-os configuration.
+				 * */
+			return (fd->file_flags & O_NOBLOCK) ? -EBUSY : -ENOTSUP;
+		}
+	}
+#endif
 	if (fd->file_flags & O_NOBLOCK) {
 		err = cfifo_pushn(usart_dev->tx_buffer, data, count);
 		LL_USART_EnableIT_TXE(usart_dev->handle);
-#if _EN_USART_TIMESTAMP
-		memcpy(&(usart_dev->write_timestamp), &(usart_dev->tx_timestamp), sizeof(timeStamp_t));
-		usart_dev->tx_ts_valid = 0;
-#endif
-		return err;
 	}
 	else {
-		while (ec_try_lock(&(file->file_lock)) == -EBUSY) {
-			if (__get_IPSR() != 0) {
-				// If we are in ISR, we should never block.
-				return -EBUSY;
-			}
-			else {
-				/**
-				 * @todo Maybe semaphore or something like that is better. 
-				 * 		 But that need async callback mechanism.
-				 * */
-				osDelay(1);
-			}
-		}
 		while (rest_count > 0) {
 			err = cfifo_pushn(usart_dev->tx_buffer, &data[count - rest_count], rest_count);
 			LL_USART_EnableIT_TXE(usart_dev->handle);
 			if (err < 0) {
+#if _WITH_CMSISOS_V2 && STM32_USART_BLOCK_WITH_SCHEDULE
+				if (osSemaphoreAcquire(usart_dev->tx_sem, osWaitForever) != osOK) {
+					// Semaphore is not active or something else is wrong.
+					// Normally unreachable.
+					return -ENOLCK;
+				}
+#else
+				/**
+				 * @todo Coroutine or something else for no-os configuration.
+				*/
+#endif
 			}
 			else {
 				rest_count -= err;
 			}
 		}
-		ec_unlock(&(file->file_lock));
-		return count;
+		err = count;
 	}
+#if _EN_USART_TIMESTAMP
+	memcpy(&(usart_dev->write_timestamp), &(usart_dev->tx_timestamp), sizeof(timeStamp_t));
+	usart_dev->tx_ts_valid = 0;
+#endif
+
+#if _WITH_CMSISOS_V2
+	osSemaphoreRelease(usart_dev->wr_sem);
+#else
+	ec_unlock(&(usart_dev->wr_lock));
+#endif
+	return err;
 }
 
 int32_t stm32_usart_ioctl(file_des_t *fd, uint32_t cmd, uint64_t arg)
@@ -341,6 +458,12 @@ int32_t stm32_usart_close(file_des_t *fd)
 			atomic_inc(&(fd->file->file_refs));
 			cfifo_delete(usart_dev->rx_buffer);
 			cfifo_delete(usart_dev->tx_buffer);
+#if _WITH_CMSISOS_V2
+			osSemaphoreDelete(usart_dev->rd_sem);
+			osSemaphoreDelete(usart_dev->wr_sem);
+			osSemaphoreDelete(usart_dev->rx_sem);
+			osSemaphoreDelete(usart_dev->tx_sem);
+#endif
 			return 0;
 		}
 		else {
@@ -390,6 +513,7 @@ void ECDRV_IRQ_Handler_USART(ec_dev_t *dev)
 			}
 #endif
 		}
+		osSemaphoreRelease(dev_usart->rx_sem);
 	}
 
 	if (LL_USART_IsEnabledIT_TXE(husart)) {
@@ -414,6 +538,7 @@ void ECDRV_IRQ_Handler_USART(ec_dev_t *dev)
 					LL_USART_TransmitData8(husart, ch);
 				}
 			}
+			osSemaphoreRelease(dev_usart->tx_sem);
 		}
 	}
 }

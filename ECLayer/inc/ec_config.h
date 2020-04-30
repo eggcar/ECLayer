@@ -35,4 +35,6 @@
 
 #define _EN_USART_TIMESTAMP	1
 
+#define _WITH_CMSISOS_V2	1
+
 #endif

@@ -28,13 +28,22 @@
 #include "ec_file.h"
 #include "ec_ioctl.h"
 #include "ioctl_cmd.h"
+#include "stm32f4xx_ll_bus.h"
+#include "stm32f4xx_ll_gpio.h"
+#include "stm32f4xx_ll_rcc.h"
 #include "stm32f4xx_ll_usart.h"
+
+#if _WITH_CMSISOS_V2
+#	include "cmsis_os2.h"
+#endif
 
 #include <stdint.h>
 
 #if _EN_USART_TIMESTAMP
 #	include "systime_port.h"
 #endif
+
+#define STM32_USART_BLOCK_WITH_SCHEDULE 0
 
 typedef struct config_stm32_usart_s {
 	enum {
@@ -54,6 +63,15 @@ typedef struct config_stm32_usart_s {
 
 typedef struct dev_stm32_usart_s {
 	USART_TypeDef *handle;
+#if _WITH_CMSISOS_V2
+	osSemaphoreId_t wr_sem;
+	osSemaphoreId_t rd_sem;
+	osSemaphoreId_t tx_sem;
+	osSemaphoreId_t rx_sem;
+#else
+	ec_lock_t wr_lock;
+	ec_lock_t rd_lock;
+#endif
 	cfifo_t *rx_buffer;
 	cfifo_t *tx_buffer;
 	config_stm32_usart_t *config;
