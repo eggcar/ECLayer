@@ -31,6 +31,10 @@
 #define O_NOBLOCK	(0x00000020U)
 #define O_TRUNC		(0x00000040U)
 
+
+#define F_GETFL		(3)
+#define F_SETFL		(4)
+
 #define EC_SEEK_SET    (0)
 #define EC_SEEK_CUR    (1)
 #define EC_SEEK_END    (2)

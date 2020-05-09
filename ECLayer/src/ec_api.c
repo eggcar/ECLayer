@@ -32,6 +32,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#if _WITH_LWIP_SOCKET_WRAPPER
+#	include "ec_lwip_wrapper.h"
+#endif
+
 int32_t open(const char *filename, uint32_t flags)
 {
 	int32_t err;
@@ -43,7 +47,7 @@ int32_t open(const char *filename, uint32_t flags)
 		if ((flags & O_CREAT) != 0x0) {
 			file = create_file(filename, NULL, NULL);
 			if (file == NULL) {
-				err = -ENOMEM;  // failed to create new file.
+				err = -ENOMEM;	// failed to create new file.
 				goto error;
 			}
 			else {
@@ -51,14 +55,14 @@ int32_t open(const char *filename, uint32_t flags)
 			}
 		}
 		else {
-			err = -ENOENT;  // file name not exist.
+			err = -ENOENT;	// file name not exist.
 			goto error;
 		}
 	}
 	else {
 		if ((flags & O_CREAT) != 0x0) {
 			if ((flags & O_EXEC) != 0x0) {
-				err = -EEXIST;  // file already exists.
+				err = -EEXIST;	// file already exists.
 				goto error;
 			}
 			else if ((flags & O_TRUNC) != 0x0) {
@@ -112,6 +116,11 @@ int32_t open(const char *filename, uint32_t flags)
 		else {
 			fd_st->file_flags = flags;
 			fd_st->file_pos = 0;
+			/**
+			 * Default set file type to e_FTYPE_DEV, but might be changed
+			 * in later version. Do not rely on it.
+			*/
+			fd_st->file_type = e_FTYPE_DEV;
 			fd_st->file = file;
 		}
 	}
@@ -127,7 +136,7 @@ int32_t open(const char *filename, uint32_t flags)
 				goto error;
 			}
 			else {
-				goto private_open_success;  // file-defined open operation success
+				goto private_open_success;	// file-defined open operation success
 			}
 		}
 		else {
@@ -150,7 +159,7 @@ int32_t close(int32_t fd)
 {
 	int32_t err;
 	if ((fd < 0) || (fd > _FD_LIST_MAXNUM)) {
-		err = -EMFILE;  // illegal fd input
+		err = -EMFILE;	// illegal fd input
 		goto error;
 	}
 	file_des_t *fd_st;
@@ -160,6 +169,15 @@ int32_t close(int32_t fd)
 		err = -EBADF;
 		goto error;
 	}
+#if _WITH_LWIP_SOCKET_WRAPPER
+	if (fd_st->file_type == e_FTYPE_SOCKET) {
+		err = (int32_t)lwip_close(ec_fd2sock(fd));
+		if (!err) {
+			ecfree(fd_st);
+		}
+		return err;
+	}
+#endif
 	file_t *file;
 	file = fd_st->file;
 
@@ -192,11 +210,16 @@ int32_t write(int32_t fd, const char *data, size_t length)
 	if (file_des == NULL) {
 		err = -EBADF;
 	}
+#if _WITH_LWIP_SOCKET_WRAPPER
+	else if (file_des->file_type == e_FTYPE_SOCKET) {
+		err = (int32_t)lwip_write(ec_fd2sock(fd), data, length);
+	}
+#endif
 	else if (file_des->file == NULL) {
 		err = -EFDNOFILE;  // file descriptor does not contain valid file.
 	}
 	else if (file_des->file->file_opts->write == NULL) {
-		err = -ENOTSUP;  // file does not support write operation.
+		err = -ENOTSUP;	 // file does not support write operation.
 	}
 	else {
 		err = file_des->file->file_opts->write(file_des, data, length);
@@ -212,11 +235,16 @@ int32_t read(int32_t fd, char *data, size_t length)
 	if (file_des == NULL) {
 		err = -EBADF;
 	}
+#if _WITH_LWIP_SOCKET_WRAPPER
+	else if (file_des->file_type == e_FTYPE_SOCKET) {
+		err = (int32_t)lwip_read(ec_fd2sock(fd), data, length);
+	}
+#endif
 	else if (file_des->file == NULL) {
 		err = -EFDNOFILE;  // file descriptor does not contain valid file.
 	}
 	else if (file_des->file->file_opts->read == NULL) {
-		err = -ENOTSUP;  // file does not support read operation.
+		err = -ENOTSUP;	 // file does not support read operation.
 	}
 	else {
 		err = file_des->file->file_opts->read(file_des, data, length);
@@ -232,6 +260,11 @@ int32_t ioctl(int32_t fd, uint32_t cmd, uint64_t arg)
 	if (file_des == NULL) {
 		err = -EBADF;
 	}
+#if _WITH_LWIP_SOCKET_WRAPPER
+	else if (file_des->file_type == e_FTYPE_SOCKET) {
+		err = (int32_t)lwip_ioctl(ec_fd2sock(fd), cmd, (void *)arg);
+	}
+#endif
 	else if (file_des->file == NULL) {
 		err = -EFDNOFILE;  // file descriptor does not contain valid file.
 	}
@@ -252,6 +285,11 @@ int64_t lseek(int32_t fd, int64_t offset, int32_t origin)
 	if (file_des == NULL) {
 		err = -EBADF;
 	}
+#if _WITH_LWIP_SOCKET_WRAPPER
+	else if (file_des->file_type == e_FTYPE_SOCKET) {
+		err = -ENOTSUP;
+	}
+#endif
 	else if (file_des->file == NULL) {
 		err = -EFDNOFILE;
 	}
@@ -260,6 +298,53 @@ int64_t lseek(int32_t fd, int64_t offset, int32_t origin)
 	}
 	else {
 		err = file_des->file->file_opts->lseek(file_des, offset, origin);
+	}
+	return err;
+}
+
+int32_t fcntl(int32_t fd, int32_t cmd, int32_t arg)
+{
+	int32_t err;
+	file_des_t *file_des;
+	file_des = get_fd_struct(fd);
+	if (file_des == NULL) {
+		err = -EBADF;
+	}
+#if _WITH_LWIP_SOCKET_WRAPPER
+	else if (file_des->file_type == e_FTYPE_SOCKET) {
+		err = lwip_fcntl(ec_fd2sock(fd), (int)cmd, (int)arg);
+		if (err >= 0) {
+			switch (cmd) {
+			case F_GETFL:
+				err = file_des->file_flags;
+				break;
+			case F_SETFL:
+				file_des->file_flags = arg;
+				err = 0;
+				break;
+			default:
+				err = -EINVAL;
+				break;
+			}
+		}
+	}
+#endif
+	else if (file_des->file == NULL) {
+		err = -EFDNOFILE;
+	}
+	else {
+		switch (cmd) {
+		case F_GETFL:
+			err = file_des->file_flags;
+			break;
+		case F_SETFL:
+			file_des->file_flags = arg;
+			err = 0;
+			break;
+		default:
+			err = -EINVAL;
+			break;
+		}
 	}
 	return err;
 }
@@ -273,25 +358,29 @@ void *mmap(void *addr, size_t len, int32_t prot, int32_t flags, int32_t fd, int3
 	if (fd < 0) {
 		// Anonymous map not supported yet.
 		err = -EBADF;
+		rtptr = (void *)err;
 		goto error;
 	}
 	file_des = get_fd_struct(fd);
 	if (file_des == NULL) {
 		err = -EBADF;
+		rtptr = (void *)err;
 		goto error;
 	}
 	else if (file_des->file == NULL) {
 		err = -EFDNOFILE;
+		rtptr = (void *)err;
 		goto error;
 	}
 	else if (file_des->file->file_opts->mmap == NULL) {
 		err = -ENOTSUP;
+		rtptr = (void *)err;
 		goto error;
 	}
 	else {
 		rtptr = file_des->file->file_opts->mmap(file_des, len, offset);
 	}
-error :
+error:
 	return rtptr;
 }
 #endif

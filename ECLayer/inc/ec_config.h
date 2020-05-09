@@ -28,7 +28,7 @@
 
 #define _DEV_NAME_MAXLEN	32
 
-#define _USE_MMAP			1
+#define _USE_MMAP			0
 #define _MMU_EXIST			0
 #define _MPU_EXIST			0
 #define _MMU_MPU_EXIST		_MMU_EXIST|_MPU_EXIST
@@ -36,5 +36,12 @@
 #define _EN_USART_TIMESTAMP	1
 
 #define _WITH_CMSISOS_V2	1
+
+#define _WITH_LWIP_SOCKET_WRAPPER	1
+
+#if _WITH_LWIP_SOCKET_WRAPPER
+#define _LWIP_SOCKET_HEADER_FILE	"lwip/sockets.h"
+#define _LWIP_OPT_FILE				"lwip/opt.h"
+#endif
 
 #endif

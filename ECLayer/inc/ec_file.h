@@ -31,6 +31,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef enum file_type_e {
+	e_FTYPE_DEV,
+	e_FTYPE_LINK,
+	e_FTYPE_SOCKET,
+} file_type_t;
+
 typedef struct file_s {
 	char file_name[_FILE_NAME_MAXLEN + 1];
 	list_t file_list;
@@ -44,7 +50,11 @@ typedef struct file_s {
 typedef struct file_des_s {
 	uint32_t file_flags;
 	int64_t file_pos;
-	struct file_s *file;
+	file_type_t file_type;
+	union {
+		struct file_s *file;
+		int sock_num;
+	};
 } file_des_t;
 
 typedef struct file_opts_s {
