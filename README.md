@@ -34,6 +34,34 @@ You should enable gnu99 standard when compiling your projects.
 
 # Change Log
 
+## 2020/05/09
+
+### ECLayer Core
+		Add lwip wrapper mode in ECLayer api. Support socket()/accept()/read()/write()...... BSD-like 
+		socket api based on lwip v2.x(I didn't test v1.4.x but that might work), while shares the same 
+		file descriptor domain with ECLayer POSIX api. We add a wrapper layer in file_des_s structure 
+		to convert ECLayer fd number to lwip socket fd number.
+
+		With this wrapper, you can use the same read()/write()/close()... api to ether serial ports or 
+		tcp streams.
+
+		在ECLayer API中添加了LWIP封装层。支持socket()、accept()、read()、write()...等BSD类socket api，基于
+		LWIP v2.x版本（我没试过在V1.4.x上是否有效，按理说应该可以用）。与ECLayer的类POSIX API共享同一个文件描述
+		符空间。在file_des_s结构体里添加了一个封装层，来支持ECLayer的fd号与lwip的fd号的互相转换。
+
+		To use LWIP wrapper, you should import lwip in your project, then check ec_config.h to define
+		_WITH_LWIP_SOCKET_WRAPPER = 1. Then in your lwip config file, make sure LWIP_COMPAT_SOCKETS = 0, 
+		and LWIP_SOCKET = 1.
+
+		使用LWIP封装层，你要先在你的工程里移植好LWIP。然后检查ec_config.h，将宏定义_WITH_LWIP_SOCKET_WRAPPER设置
+		为1。然后在lwip的配置文件中，检查以下两个宏的定义：LWIP_COMPAT_SOCKETS = 0，LWIP_SOCKET = 1。
+
+### STM32 U(S)ART driver:
+		Fixed a bug imported in last commit that initialized a CMSIS-OS2 semaphore with wrong value.
+
+		修正了上次提交中引入的一个初始化CMSIS-OS2 semaphore的参数错误。
+
+
 ## 2020/05/01
 ### ECLayer configuration
 		Add a configuration in ec_config.h to enable/disable CMSIS-OS v2 api usage in ECLayer and ECDriver.
