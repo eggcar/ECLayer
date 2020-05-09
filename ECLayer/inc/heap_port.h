@@ -29,10 +29,16 @@
 #ifndef __HEAP_PORT_H
 #define __HEAP_PORT_H
 
+#include "ec_config.h"
+
 #include <stddef.h>
 
-void* ecmalloc(size_t size);
+void *ecmalloc(size_t size);
 
-void ecfree(void * p);
+void ecfree(void *p);
+
+void *ecrealloc(void *p, size_t size);
+
+void *eccalloc(size_t n, size_t size);
 
 #endif
