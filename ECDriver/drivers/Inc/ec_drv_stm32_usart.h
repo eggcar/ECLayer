@@ -43,7 +43,7 @@
 #	include "systime_port.h"
 #endif
 
-#define STM32_USART_BLOCK_WITH_SCHEDULE 0
+#define STM32_USART_BLOCK_WITH_SCHEDULE 1
 
 typedef struct config_stm32_usart_s {
 	enum {

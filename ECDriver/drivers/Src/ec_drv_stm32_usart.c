@@ -73,13 +73,13 @@ int32_t stm32_usart_open(file_des_t *fd, const char *filename, uint32_t flags)
 				goto release_tx_buffer;
 			}
 
-			usart_dev->rd_sem = osSemaphoreNew(1, 0, NULL);
+			usart_dev->rd_sem = osSemaphoreNew(1, 1, NULL);
 			if (usart_dev->rd_sem == NULL) {
 				err = -ENOMEM;
 				goto release_wr_sem;
 			}
 
-			usart_dev->rx_sem = osSemaphoreNew(1, 0, NULL);
+			usart_dev->rx_sem = osSemaphoreNew(1, 1, NULL);
 			if (usart_dev->rx_sem == NULL) {
 				err = -ENOMEM;
 				goto release_rd_sem;
