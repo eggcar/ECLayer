@@ -28,6 +28,9 @@ void EC_Driver_Initialize(void)
 	device_regist(&device_stm32_usart1);
 	file_regist(&driver_stm32_usart1);
 
+	device_regist(&device_stm32_usart2);
+	file_regist(&driver_stm32_usart2);
+
 	device_regist(&device_stm32_usart3);
 	file_regist(&driver_stm32_usart3);
 
