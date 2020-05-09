@@ -22,9 +22,8 @@
 #pragma once
 
 // clang-format off
-#define __DEV_INCLUDE(x)	#x
-#define _DEV_INCLUDE(x)		__DEV_INCLUDE(../../devices/Inc/##x##.h)
-#define DEV_INCLUDE(x)		_DEV_INCLUDE(x)
+#define _DEV_INCLUDE(x)	#x
+#define DEV_INCLUDE(x)	_DEV_INCLUDE(../../devices/Inc/x.h)
 // clang-format on
 
 // User defined device descriptor files.
@@ -33,6 +32,7 @@
 #include DEV_INCLUDE(dev_uart7)
 #include DEV_INCLUDE(dev_uart8)
 #include DEV_INCLUDE(dev_usart1)
+#include DEV_INCLUDE(dev_usart2)
 #include DEV_INCLUDE(dev_usart3)
 #include DEV_INCLUDE(dev_usart6)
 #include DEV_INCLUDE(dev_lcd2002)
