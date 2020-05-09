@@ -26,6 +26,7 @@
 */
 
 #include "FreeRTOS.h"
+#include "ec_config.h"
 
 #include <stddef.h>
 
@@ -43,3 +44,14 @@ void ecfree(void *p)
 {
 	vPortFree(p);
 }
+
+void *ecrealloc(void *p, size_t size)
+{
+	return pvPortRealloc(p, size);
+}
+
+void *eccalloc(size_t n, size_t size)
+{
+	return pvPortCalloc(n, size);
+}
+
