@@ -74,7 +74,7 @@ int socket(int domain, int type, int protocol)
 		 * ECLayer exceptions.h. So if we have lwip global errno, just return 
 		 * the exact value.
 		*/
-		return errno;
+		return -errno;
 #	else
 		/**
 		 * Actual reason of error is not available.
