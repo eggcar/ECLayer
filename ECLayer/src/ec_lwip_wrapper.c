@@ -103,6 +103,7 @@ int socket(int domain, int type, int protocol)
 			goto close_socket;
 		}
 		else {
+			err = fd;
 			fd_st->file_flags = O_RDWR;
 			fd_st->file_pos = 0;
 			fd_st->file_type = e_FTYPE_SOCKET;
