@@ -81,17 +81,22 @@ static inline void list_delete(list_t *node)
 
 static inline void list_swap(list_t *a, list_t *b)
 {
-	list_t tmp;
-	tmp.prev = a->prev;
-	tmp.next = a->next;
+	if (a == b) {
+		return;
+	}
+
+	list_t *tmp = b->prev;
+	b->prev->next = b->next;
+	b->next->prev = b->prev;
+	b->prev = a->prev;
+	b->next = a->next;
 	a->prev->next = b;
 	a->next->prev = b;
-	b->prev->next = a;
-	b->next->prev = a;
-	a->prev = b->prev;
-	a->next = b->next;
-	b->prev = tmp.prev;
-	b->next = tmp.next;
+	if (tmp == a) {
+		tmp = b;
+	}
+	list_insert(a, tmp, tmp->next);
+	return;
 }
 
 static inline void list_append(list_t *new_node, list_t *head)
